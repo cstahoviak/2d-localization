@@ -79,12 +79,16 @@ if __name__ == "__main__":
     steps = 10          # Number of time steps to iterate over
     wait_time = 0.5     # Interval between posterior updates
 
+    # Create the truth data
+    truth = truth_fcn_1d(steps)
+
     # Create a set of simulated measurements of shape (steps,)
-    measurements = measurements_fcn_1d(truth_fcn_1d(steps))
+    measurements = measurements_fcn_1d(truth)
 
     # Animate the SIS posterior distribution
     anim = AnimatePosterior(name="SIS", algo=sis_filter, steps=steps,
                             n_particles=n_particles, prior=prior_fcn_1d,
+                            truth=truth,
                             measurements=measurements)
     plt.show()
 
@@ -95,6 +99,7 @@ if __name__ == "__main__":
         # Only create this figure below if filter ran to completion
         _particles = anim.particles
         _weights = anim.weights
+        _estimate_1d = anim.trajectory
         Neff = 1 / np.sum(_weights ** 2, axis=1)
 
         # Create a figure for plotting several time steps together
@@ -105,13 +110,20 @@ if __name__ == "__main__":
 
         for step, ax_idx in zip(time_steps, indices):
             # Plot data
-            ax[ax_idx].scatter(_particles[step], _weights[step], marker=".")
+            ax[ax_idx].scatter(_particles[step], _weights[step], marker=".",
+                               label='Particles')
             ax[ax_idx].vlines(_particles[step], 0, _weights[step], lw=1)
+            ax[ax_idx].axvline(truth[step], color='black',
+                               label='True 1D State')
+            ax[ax_idx].axvline(_estimate_1d[step], ls='--', color='tab:orange',
+                               label='SIS Filter 1D State')
 
             # Annotate data
             ax[ax_idx].set_title(f"SIS Posterior, time k={step},"
                                  f"Neff={int(Neff[step])}")
+
             ax[ax_idx].set_xlabel(f"1D State, x")
             ax[ax_idx].set_xlim(left=0.0, right=60)
+            ax[ax_idx].legend()
 
         plt.show()

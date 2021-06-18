@@ -14,7 +14,7 @@ nparr = np.ndarray
 
 class AnimatePosterior(object):
     def __init__(self, name: str, algo: Callable, steps: int, n_particles: int,
-                 prior: Callable, measurements: nparr):
+                 prior: Callable, truth: nparr, measurements: nparr):
         """
         Constructor.
 
@@ -24,14 +24,22 @@ class AnimatePosterior(object):
             steps:
             n_particles:
             prior:
+            truth:
             measurements:
         """
         self._name = name
         self._fig, self._ax = plt.subplots()
 
         # Create plots
-        self._scat = self._ax.scatter([], [], marker=".")
-        self._lines = self._ax.vlines([], [], [], lw=1)
+        self._scat = self._ax.scatter([], [], marker=".", zorder=0)
+        self._lines = self._ax.vlines([], [], [], lw=1, zorder=1)
+        self._line1 = self._ax.axvline(truth[0], color='black', zorder=3)
+        self._line2 = self._ax.axvline(0, ls='--', color='tab:orange', zorder=4)
+
+        # Assign names to each plot (displayed by the lengend)
+        self._scat.set_label('Particles')
+        self._line1.set_label('True 1D State')
+        self._line2.set_label(f'{self._name} Filter 1D State')
 
         # Set plot attributes
         self._ax.set_xlabel(f"1D State, x")
@@ -55,8 +63,12 @@ class AnimatePosterior(object):
         self._neff = np.zeros(self._steps, dtype=int)
         self._neff[0] = self._n_particles
 
-        # Store the measurements
+        # Store the truth and measurements
+        self._truth = truth
         self._measurements = measurements
+
+        # Store the 1D MAP estimate
+        self._estimate_1d = np.nan * np.ones(self._steps)
 
         # Store the current index
         self._idx = 0
@@ -76,6 +88,10 @@ class AnimatePosterior(object):
     def weights(self):
         return self._weights
 
+    @property
+    def trajectory(self):
+        return self._estimate_1d
+
     def __call__(self, frame: int):
         """
 
@@ -85,7 +101,9 @@ class AnimatePosterior(object):
         if frame == 0:
             self._scat.set_offsets(np.zeros((self._n_particles, 2)))
             self._lines.set_segments(np.zeros((1, 2, 2)))
-            return [self._scat, self._lines]
+            self._line1.set_xdata(self._truth[self._idx])
+            self._line2.set_xdata(self._truth[self._idx])
+            return [self._scat, self._lines, self._line1, self._line2]
 
         # Update the posterior via the chosen algorithm
         self.update()
@@ -101,16 +119,21 @@ class AnimatePosterior(object):
             zip(self._particles[self._idx], self._weights[self._idx])])
         self._lines.set_segments(line_segs)
 
+        # Update the vertical dashed line representing the true 1D position
+        self._ax.set_ylim(0, max(self._weights[self._idx]))
+        self._line1.set_xdata(self._truth[self._idx])
+        self._line2.set_xdata(self._estimate_1d[self._idx])
+
         self._ax.set_title(f"{self._name} Posterior, time k={self._idx}, "
                            f"Neff={self._neff[self._idx]}")
-        self._ax.set_ylim(0, max(self._weights[self._idx]))
+        self._ax.legend()
 
         if self._idx == self._steps - 1:
             # Reset the index such that the animation starts from the beginning
             self._idx = 0
             self._complete = True
 
-        return [self._scat, self._lines]
+        return [self._scat, self._lines, self._line1, self._line2]
 
     def update(self):
         """
@@ -124,6 +147,10 @@ class AnimatePosterior(object):
                 self._algo(particles=self._particles[self._idx],
                            weights=self._weights[self._idx],
                            measurement=self._measurements[self._idx+1])
+
+            # Compute the MAP estimate
+            idx = self._weights[self._idx+1].argmax()
+            self._estimate_1d[self._idx+1] = self._particles[self._idx+1, idx]
 
             # Compute the effective sample size
             self._neff[self._idx+1] = \

@@ -18,6 +18,9 @@ nparr = np.ndarray
 RNG = np.random.default_rng(1234)
 mvn.random_state = RNG
 
+# Seed the multivariate normal distribution random number generator
+INIT_RNG = np.random.default_rng(1234)
+
 
 def transition_fcn_2d(particles: nparr, linear_vel: float, angular_vel: float,
                       dt: float,  process_noise_cov: Optional[nparr] = None,
@@ -130,6 +133,40 @@ def likelihood_fcn_2d(state: nparr, landmarks: nparr, measurements: nparr,
         weights = weights / np.sum(weights)
 
     return weights
+
+
+def prior_fcn_2d(mean: nparr, dim: int) -> nparr:
+    """
+    The prior density for the 2D Localization demo, p(x_0).
+
+    Args:
+        mean: The mean value around which the Gaussian prior will be
+            distributed.
+        dim: The number of particles.
+
+    Returns:
+        prior: The set or particles at time step zero.
+    """
+    # Create the particle's initial condition from a large uniform distribution
+    # NOTE: This didn't work - 300 particles was not enough to adequately
+    # describe the posterior without getting lucky.
+    # for idx in range(nx-1):
+    #     min_val = _state_truth[:, idx].min()
+    #     max_val = _state_truth[:, idx].min()
+    #     dist = uniform(loc=min_val, scale=max_val-min_val)
+    #     particles[0, :, idx] = dist.rvs(n_particles)
+    # # particles[0, :, 2] = uniform(loc=0, scale=(2*np.pi)).rvs(n_particles)
+    # particles[0, :, 2] = np.pi * np.ones(n_particles)
+
+    # Initialize the particles by adding Gaussian noise to the initial cond.
+    init_dist = mvn(mean=mean[:2], cov=1.5)
+    init_dist.random_state = INIT_RNG
+
+    prior = np.nan * np.ones((dim, 3))
+    prior[:, :2] = init_dist.rvs(dim)
+    prior[:, 2] = np.zeros(dim)
+
+    return prior
 
 
 def truth_fcn_2d(times: nparr, x0: nparr, process_noise_cov: nparr,

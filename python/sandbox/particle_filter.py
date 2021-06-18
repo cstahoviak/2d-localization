@@ -211,13 +211,17 @@ if __name__ == '__main__':
     steps = 20          # Number of time steps to iterate over
     wait_time = 0.5     # Interval between posterior updates
 
+    # Create the truth data
+    truth = truth_fcn_1d(steps)
+
     # Create a set of simulated measurements of shape (steps,)
-    measurements = measurements_fcn_1d(truth_fcn_1d(steps))
+    measurements = measurements_fcn_1d(truth)
 
     # Animate the Generic PF posterior distribution
     anim = AnimatePosterior(name="PF", algo=generic_particle_filter,
                             steps=steps, n_particles=n_particles,
-                            prior=prior_fcn_1d, measurements=measurements)
+                            prior=prior_fcn_1d, truth=truth,
+                            measurements=measurements)
     plt.show()
 
     """
@@ -225,6 +229,7 @@ if __name__ == '__main__':
     """
     pf_particles = anim.particles
     pf_weights = anim.weights
+    estimate_1d = anim.trajectory
 
     # Init particles states and weights (SIS Filter, Generic PF and SIR-PF)
     sis_particles = np.zeros((steps, n_particles))
@@ -272,18 +277,28 @@ if __name__ == '__main__':
 
     for step, ax_idx in zip(time_steps, indices):
         # Plot SIS data
-        ax1[ax_idx].scatter(sis_particles[step], sis_weights[step], marker=".")
+        ax1[ax_idx].scatter(sis_particles[step], sis_weights[step], marker=".",
+                            label='Particles')
         ax1[ax_idx].vlines(sis_particles[step], 0, sis_weights[step], lw=1)
+        ax1[ax_idx].axvline(truth[step], color='black', label='True 1D State')
+        ax1[ax_idx].axvline(estimate_1d[step], ls='--', color='tab:orange',
+                            label='SIS Filter 1D State')
         ax1[ax_idx].set_title(f"SIS Posterior, time k={step}, Neff={Neff[step]}")
         ax1[ax_idx].set_xlabel(f"1D State, x")
         ax1[ax_idx].set_xlim(left=0.0, right=60)
+        ax1[ax_idx].legend()
 
         # Plot Generic PF data
-        ax2[ax_idx].scatter(pf_particles[step], pf_weights[step], marker=".")
+        ax2[ax_idx].scatter(pf_particles[step], pf_weights[step], marker=".",
+                            label='Particles')
         ax2[ax_idx].vlines(pf_particles[step], 0, pf_weights[step], lw=1)
+        ax2[ax_idx].axvline(truth[step], color='black', label='True 1D State')
+        ax2[ax_idx].axvline(estimate_1d[step], ls='--', color='tab:orange',
+                            label='PF Filter 1D State')
         ax2[ax_idx].set_title(f"PF Posterior, time k={step}")
         ax2[ax_idx].set_xlabel(f"1D State, x")
         ax2[ax_idx].set_xlim(left=0.0, right=60)
+        ax2[ax_idx].legend()
 
         # Plot the SIR-PF Data
 
