@@ -76,7 +76,7 @@ class AnimatePosterior(object):
     def weights(self):
         return self._weights
 
-    def __call__(self, frame):
+    def __call__(self, frame: int):
         """
 
         Args:
