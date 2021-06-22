@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from dynamical_system_1d import transition_fcn_1d, likelihood_fcn_1d,\
     importance_fcn_1d, prior_fcn_1d, truth_fcn_1d, measurements_fcn_1d
 from sequential_importance_sampling import sis_filter
+from animate_posterior import AnimatePosterior
 
 # Shorthand for type hints
 nparr = np.ndarray
@@ -88,13 +89,14 @@ def systematic_resample(particles: nparr, weights: nparr) -> \
 
         # Assign parent
 
+    # All particles will have the same weight after resampling, 1/n_particles
     new_weights = (1 / n_particles) * np.ones_like(weights)
 
     return new_particles, new_weights
 
 
 def generic_particle_filter(particles: nparr, weights: nparr,
-                            measurement: float, neff_thres: int = 10) -> \
+                            measurement: float, neff_thres: int = 25) -> \
         Tuple[nparr, nparr]:
     """
     The "Generic" Particle Filter. Taken from Ristic Table 3.3.
@@ -108,23 +110,26 @@ def generic_particle_filter(particles: nparr, weights: nparr,
             occurs.
 
     Returns:
-
+        new_particles: Particles containing state estimates at the current time
+            step, k+1.
+        new_weights: The particle weights at the current time step, k+!.
     """
     # Filtering vis SIS
-    particles, weights = sis_filter(particles, weights, measurement)
+    new_particles, new_weights = sis_filter(particles, weights, measurement)
 
     # Note that any expected value calculations (MMSE, MAP, etc.) should occur
     # before resampling.
 
     # Calculate N_eff using Arulampalam Eqn. (51)
-    Neff = 1 / np.sum(weights ** 2)
+    Neff = 1 / np.sum(new_weights ** 2)
 
     if Neff < neff_thres:
         # Resample particles via "systematic resampling"
         print('RESAMPLING PARTICLES')
-        particles, weights = systematic_resample(particles, weights)
+        new_particles, new_weights = systematic_resample(new_particles,
+                                                         new_weights)
 
-    return particles, weights
+    return new_particles, new_weights
 
 
 def sir_filter(particles: nparr, measurement: float,
@@ -153,16 +158,18 @@ def sir_filter(particles: nparr, measurement: float,
         measurement: The current measurement, y_{k+1}.
 
     Returns:
-
+        new_particles: Particles containing state estimates at the current time
+            step, k+1.
     """
     # Initialize the weights
     n_particles = len(particles)
     weights = np.zeros(n_particles)
 
     # Filter via the SIR-PF
+    new_particles = np.zeros_like(particles)
     for idx, particle in enumerate(particles):
         # Sample x_{k+1}^i from the transition density
-        particles[idx] = importance_fcn(particle).rvs()
+        new_particles[idx] = importance_fcn(particle).rvs()
 
         # Calculate the importance weight
         weights[idx] = likelihood_fcn(particle, measurement)
@@ -172,9 +179,9 @@ def sir_filter(particles: nparr, measurement: float,
 
     # Resample particles (note that particle weights are not stored or carried
     # from one time step to the next).
-    particles, _ = systematic_resample(particles, weights)
+    new_particles, _ = systematic_resample(new_particles, weights)
 
-    return particles
+    return new_particles
 
 @dataclass
 class Particle:
@@ -204,27 +211,35 @@ if __name__ == '__main__':
     steps = 20          # Number of time steps to iterate over
     wait_time = 0.5     # Interval between posterior updates
 
-    # Init particles states and weights (SIS Filter, Generic PF and SIR-PF)
-    sis_particles = np.zeros((steps, n_particles))
-    sis_weights = np.zeros((steps, n_particles))
-    pf_particles = np.zeros((steps, n_particles))
-    pf_weights = np.zeros((steps, n_particles))
-    sir_particles = np.zeros((steps, n_particles))
-
-    # Initialize the particles based on a uniform prior, U(1,4)
-    sis_particles[0] = prior_fcn_1d(n_particles)
-    sis_weights[0] = (1 / n_particles) * np.ones_like(n_particles)
-    # Use the same prior and weights for the GPF as for the SIS filter
-    pf_particles[0] = sis_particles[0]
-    pf_weights[0] = sis_weights[0]
-    # Use the same prior and weights for the SIR-PF
-    sir_particles[0] = sis_particles[0]
-
-    # Create the "truth" data, of shape (steps+1,)
+    # Create the truth data
     truth = truth_fcn_1d(steps)
 
     # Create a set of simulated measurements of shape (steps,)
     measurements = measurements_fcn_1d(truth)
+
+    # Animate the Generic PF posterior distribution
+    anim = AnimatePosterior(name="PF", algo=generic_particle_filter,
+                            steps=steps, n_particles=n_particles,
+                            prior=prior_fcn_1d, truth=truth,
+                            measurements=measurements)
+    plt.show()
+
+    """
+    Visualize a set of pre-defined time steps
+    """
+    pf_particles = anim.particles
+    pf_weights = anim.weights
+    estimate_1d = anim.trajectory
+
+    # Init particles states and weights (SIS Filter, Generic PF and SIR-PF)
+    sis_particles = np.zeros((steps, n_particles))
+    sis_weights = np.zeros((steps, n_particles))
+    sir_particles = np.zeros((steps, n_particles))
+
+    # Use the same prior and weights for the SIS filter and the SIR-PF
+    sis_particles[0] = pf_particles[0]
+    sis_weights[0] = pf_weights[0]
+    sir_particles[0] = pf_particles[0]
 
     # Store the effective sample size (Neff) for the SIS filter
     Neff = np.zeros(n_particles)
@@ -238,11 +253,11 @@ if __name__ == '__main__':
                        weights=sis_weights[k],
                        measurement=measurements[k+1])
 
-        # Filtering via the "generic" particle filter
-        pf_particles[k+1], pf_weights[k+1] = \
-            generic_particle_filter(particles=pf_particles[k],
-                                    weights=pf_weights[k],
-                                    measurement=measurements[k+1])
+        # # Filtering via the "generic" particle filter
+        # pf_particles[k+1], pf_weights[k+1] = \
+        #     generic_particle_filter(particles=pf_particles[k],
+        #                             weights=pf_weights[k],
+        #                             measurement=measurements[k+1])
 
         # Filtering via the SIR particle filter
         sir_particles[k+1] = sir_filter(particles=sir_particles[k],
@@ -262,18 +277,28 @@ if __name__ == '__main__':
 
     for step, ax_idx in zip(time_steps, indices):
         # Plot SIS data
-        ax1[ax_idx].scatter(sis_particles[step], sis_weights[step], marker=".")
+        ax1[ax_idx].scatter(sis_particles[step], sis_weights[step], marker=".",
+                            label='Particles')
         ax1[ax_idx].vlines(sis_particles[step], 0, sis_weights[step], lw=1)
+        ax1[ax_idx].axvline(truth[step], color='black', label='True 1D State')
+        ax1[ax_idx].axvline(estimate_1d[step], ls='--', color='tab:orange',
+                            label='SIS Filter 1D State')
         ax1[ax_idx].set_title(f"SIS Posterior, time k={step}, Neff={Neff[step]}")
         ax1[ax_idx].set_xlabel(f"1D State, x")
         ax1[ax_idx].set_xlim(left=0.0, right=60)
+        ax1[ax_idx].legend()
 
         # Plot Generic PF data
-        ax2[ax_idx].scatter(pf_particles[step], pf_weights[step], marker=".")
+        ax2[ax_idx].scatter(pf_particles[step], pf_weights[step], marker=".",
+                            label='Particles')
         ax2[ax_idx].vlines(pf_particles[step], 0, pf_weights[step], lw=1)
+        ax2[ax_idx].axvline(truth[step], color='black', label='True 1D State')
+        ax2[ax_idx].axvline(estimate_1d[step], ls='--', color='tab:orange',
+                            label='PF Filter 1D State')
         ax2[ax_idx].set_title(f"PF Posterior, time k={step}")
         ax2[ax_idx].set_xlabel(f"1D State, x")
         ax2[ax_idx].set_xlim(left=0.0, right=60)
+        ax2[ax_idx].legend()
 
         # Plot the SIR-PF Data
 

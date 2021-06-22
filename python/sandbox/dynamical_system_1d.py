@@ -9,7 +9,7 @@ example:
 
 Also included are methods for generating truth and measurement data.
 """
-from typing import Callable
+from typing import Callable, Union
 
 import numpy as np
 from scipy.stats import uniform
@@ -85,7 +85,7 @@ def importance_fcn_1d(state: float):
     return transition_fcn_1d(state)
 
 
-def prior_fcn_1d(dim: int = 1) -> float:
+def prior_fcn_1d(dim: int = 1) -> Union[float, nparr]:
     """
     The prior density for the 1D Dynamical System example, p(x_0).
 
