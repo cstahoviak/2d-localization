@@ -33,7 +33,7 @@ def localization_2d_pf(particles: nparr, weights: nparr, measurement: nparr,
                        likelihood_fcn: Callable = likelihood_fcn_2d) -> \
         Tuple[nparr, nparr, nparr]:
     """
-    An implementation of the SIR-PR for the 2D Localization demo. This particle
+    An implementation of the SIR-PF for the 2D Localization demo. This particle
     filter uses the transition density as the importance density from which to
     sample x_{k+1}^i, and resamples when the effective sample size drops below a
     threshold value.
@@ -70,16 +70,10 @@ def localization_2d_pf(particles: nparr, weights: nparr, measurement: nparr,
     # Compute the mean and covariance from the current set of particles, k+1
     state = np.average(new_particles, axis=0, weights=weights)
     # state = new_particles[weights.argmax()]  # MAP estimate (ugly)
-    cov = np.cov(new_particles[:, :2], rowvar=False)
+    # cov = np.cov(new_particles[:, :2], rowvar=False)
 
     # Update the particles weights via the current measurement
     if np.mod(time_step, skip) == 0:
-        # TODO: Attempt to vectorize the evaluation of the likelihood.
-        # expected_meas_vec = range_sensor_model(particles[k+1][:, :2],
-        #                                        landmarks)
-        # print('Evaluating likelihood in vectorized form.')
-        # w1 = likelihood_fcn_2d(expected_meas_vec[1:], measurements[k+1])
-
         # Update all weights from the current time step to the end such
         # that the "new_weights" are correctly set at the next measurement
         # update.
@@ -124,18 +118,18 @@ class Localization2D(object):
         self._fig, self._ax = plt.subplots()
         self._fig.suptitle(self._name)
 
-        # Create plots
+        # Scatter plot for particles
         self._scat = self._ax.scatter([], [], c="tab:grey", marker=".",
                                       edgecolor="black", zorder=1)
+        # The truth trajectory
         self._line1, = self._ax.plot([], [], c="tab:blue", zorder=0)
+        # The estimated trajectory
         self._line2, = self._ax.plot([], [], c="darkorange", zorder=2)
+        # Markers representing landmark locations
         self._lm = self._ax.scatter([], [], c="m", marker="P", zorder=3)
+        # Markers for the start and end positions of the truth trajectory
         self._start = self._ax.scatter([], [], c="g", marker="X", zorder=4)
         self._end = self._ax.scatter([], [], c="tab:red", marker="X", zorder=5)
-
-        # Set plot attributes
-        self._ax.set_xlim(left=truth[:, 0].min()-1, right=truth[:, 0].max()+1)
-        self._ax.set_ylim(bottom=truth[:, 1].min()-1, top=truth[:, 1].max()+1)
 
         # Store the algorithm to be used for filtering
         self._algo = algo
@@ -153,8 +147,10 @@ class Localization2D(object):
 
         # Store particle states and weights for plotting
         self._particles = np.zeros((self._steps, self._n_particles, self._nx))
-        self._particles[0] = prior(truth[0], self._n_particles)
         self._weights = np.zeros((self._steps, self._n_particles))
+
+        # Use the prior density to create the initial condition
+        self._particles[0] = prior(truth[0], self._n_particles)
         self._weights[0] = (1 / self._n_particles) * np.ones(self._n_particles)
 
         # Store the estimated trajectory
@@ -164,6 +160,15 @@ class Localization2D(object):
         self._truth = truth
         self._measurements = measurements
         self._landmarks = get_landmarks()
+
+        # Set plot attributes
+        x_min = min(self._truth[:, 0].min(), self._landmarks[:, 0].min())
+        x_max = max(self._truth[:, 0].max(), self._landmarks[:, 0].max())
+        y_min = min(self._truth[:, 1].min(), self._landmarks[:, 1].min())
+        y_max = max(self._truth[:, 1].max(), self._landmarks[:, 1].max())
+        offset = 1
+        self._ax.set_xlim(left=x_min - offset, right=x_max + offset)
+        self._ax.set_ylim(bottom=y_min - offset, top=y_max + offset)
 
         # Store the current index
         self._idx = 0
@@ -185,6 +190,7 @@ class Localization2D(object):
 
     def __call__(self, frame: int):
         if frame == 0:
+            # TODO: Not actually sure is=f this conditional is necessary
             self._scat.set_offsets(self._particles[self._idx, :, :2])
             self._line1.set_data(self._truth[:, 0], self._truth[:, 1])
             self._line2.set_data([], [])
@@ -195,7 +201,7 @@ class Localization2D(object):
             return [self._scat, self._line1, self._line2, self._lm, self._start,
                     self._end]
 
-        # Update the posterior via the chosen algorithm
+        # Update the posterior via the chosen filtering algorithm
         self.update()
 
         # Update the particles with data at the current time step, k+1
@@ -208,11 +214,11 @@ class Localization2D(object):
         self._start.set_offsets(self._truth[0, :2])
         self._end.set_offsets(self._truth[-1, :2])
 
-        # Update the trajectory plot
+        # Update the estimated trajectory plot
         self._line2.set_data(self._trajectory[:self._idx, 0],
                              self._trajectory[:self._idx, 1])
 
-        # Update title (won't update of blit=True)
+        # Update title (won't update if blit=True)
         # self._ax.set_title(f"{self._name}, time k={self._idx}")
 
         if self._idx == self._steps - 1:
@@ -345,16 +351,26 @@ if __name__ == '__main__':
     """
     Plot the results.
     """
-    # Create figure for plotting
     fig, ax = plt.subplots()
     ax.set_title("2D Localization Particle Filter")
-    ax.plot(_state_truth[:, 0], _state_truth[:, 1], c="tab:blue")
-    ax.scatter(_state_truth[0, 0], _state_truth[0, 1], c="g", marker="X")
-    ax.scatter(_state_truth[-1, 0], _state_truth[-1, 1], c="tab:red", marker="X")
-    ax.scatter(_landmarks[:, 0], _landmarks[:, 1], c="m", marker="P")
 
-    # Plot the estimated trajectory
-    ax.plot(_trajectory[:, 0], _trajectory[:, 1], c="darkorange")
-    ax.scatter(_trajectory[1, 0], _trajectory[1, 1], c="lime", marker="X")
-    ax.scatter(_trajectory[-1, 0], _trajectory[-1, 1], c="red", marker="X")
+    # Plot the truth and estimated trajectories
+    ax.plot(_state_truth[:, 0], _state_truth[:, 1], c="tab:blue",
+            label="truth trajectory")
+    ax.plot(_trajectory[:, 0], _trajectory[:, 1], c="darkorange",
+            label="PF estimated trajectory")
+    # Plot the truth and estimated start/end points
+    ax.scatter(_state_truth[0, 0], _state_truth[0, 1], c="g", marker="X",
+               label="true Start point")
+    ax.scatter(_state_truth[-1, 0], _state_truth[-1, 1], c="tab:red",
+               marker="X", label="truth end point")
+    ax.scatter(_trajectory[1, 0], _trajectory[1, 1], c="lime", marker="X",
+               label="estimated start point")
+    ax.scatter(_trajectory[-1, 0], _trajectory[-1, 1], c="red", marker="X",
+               label="estimated end point")
+    # Plot the landmarks
+    ax.scatter(_landmarks[:, 0], _landmarks[:, 1], c="m", marker="P",
+               label="landmarks")
+
+    ax.legend()
     plt.show()

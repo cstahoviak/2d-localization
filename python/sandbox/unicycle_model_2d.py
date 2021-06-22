@@ -238,6 +238,10 @@ def range_sensor_model(positions: nparr, landmarks: nparr,
     if vectorize:
         for l, lm in enumerate(landmarks):
             lm_vector = lm * np.ones((positions.shape[0], landmarks.shape[1]))
+            # TODO: Noise is incorrectly added to each measurement (not added at
+            #   all right now). For each position and each landmark, Gaussian
+            #   noise should be added to the measurement. This is done below,
+            #   but needs to be vectorized.
             measurements[1:, l] = np.sqrt(np.sum(
                 (positions - lm_vector) ** 2, axis=1))
     else:
