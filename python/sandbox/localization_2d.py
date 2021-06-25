@@ -74,9 +74,6 @@ def localization_2d_pf(particles: nparr, weights: nparr, measurement: nparr,
 
     # Update the particles weights via the current measurement
     if np.mod(time_step, skip) == 0:
-        # Update all weights from the current time step to the end such
-        # that the "new_weights" are correctly set at the next measurement
-        # update.
         landmarks = get_landmarks()
         new_weights = likelihood_fcn(new_particles, landmarks, measurement)
 
