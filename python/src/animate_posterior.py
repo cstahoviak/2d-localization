@@ -143,14 +143,13 @@ class AnimatePosterior(object):
         if not self._complete:
             # print(f'Updating particles at time step k = {self._idx+1}')
             # Update the particle states and weights
-            self._particles[self._idx+1], self._weights[self._idx+1] = \
+            self._particles[self._idx+1], self._weights[self._idx+1], state = \
                 self._algo(particles=self._particles[self._idx],
                            weights=self._weights[self._idx],
                            measurement=self._measurements[self._idx+1])
 
-            # Compute the MAP estimate
-            idx = self._weights[self._idx+1].argmax()
-            self._estimate_1d[self._idx+1] = self._particles[self._idx+1, idx]
+            # Store the estimated 1D state (MAP estimate)
+            self._estimate_1d[self._idx+1] = state
 
             # Compute the effective sample size
             self._neff[self._idx+1] = \
