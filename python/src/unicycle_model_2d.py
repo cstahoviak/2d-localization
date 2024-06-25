@@ -50,7 +50,8 @@ def transition_fcn_2d(particles: nparr, linear_vel: float, angular_vel: float,
         linear_vel: The true linear velocity at time step k.
         angular_vel: The true angular velocity at time step k.
         dt: The discrete time step, in seconds.
-        vectorize:
+        vectorize: If True, the dynamics propagation for all particles is
+            vectorized (faster execution time).
 
     Returns:
         new_particles:
@@ -125,6 +126,7 @@ def likelihood_fcn_2d(state: nparr, landmarks: nparr, measurements: nparr,
 
         # Compute the likelihood that the current measurement is
         # explained by a given particle's current state estimate
+        # TODO: Vectorize this if possible (list comprehension is slow).
         likelihood = np.array([mvn(expected, meas_noise_cov).pdf(m) for
                                expected in expected_meas[1:]])
 
